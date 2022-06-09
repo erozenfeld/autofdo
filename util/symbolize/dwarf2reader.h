@@ -40,11 +40,17 @@ class Dwarf2Handler;
 class LineInfoHandler;
 class DwpReader;
 
+struct AttributeSpec {
+    enum DwarfAttribute name;
+    enum DwarfForm form;
+    // For the special case of DW_FORM_implicit_const
+    uint32 value;
+};
+
 // This maps from a string naming a section to a pair containing a
 // the data for the section, and the size of the section.
 typedef map<string, pair<const char*, uint64> > SectionMap;
-typedef std::list<std::pair<enum DwarfAttribute, enum DwarfForm> >
-    AttributeList;
+typedef std::list<AttributeSpec> AttributeList;
 typedef AttributeList::iterator AttributeIterator;
 typedef AttributeList::const_iterator ConstAttributeIterator;
 
@@ -487,6 +493,12 @@ class CompilationUnit {
 
   // Reads the DWARF2/3 abbreviations for this compilation unit
   void ReadAbbrevs();
+
+  // Reads address size from DWARF header for this compilation unit
+  bool ReadAddressSize(const char** headerptr);
+
+  // Reads .debug_abbrev section offset DWARF header for this compilation unit
+  bool ReadAbbrevOffset(const char** headerptr);
 
   // Processes a single DIE for this compilation unit.
   //
