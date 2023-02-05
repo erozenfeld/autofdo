@@ -9,8 +9,10 @@
 #include "base/commandlineflags.h"
 #include "base/logging.h"
 #include "gcov.h"
+#if defined(HAVE_LLVM)
 #include "llvm_profile_reader.h"
 #include "llvm_profile_writer.h"
+#endif
 #include "profile_reader.h"
 #include "profile_writer.h"
 #include "symbol_map.h"
@@ -18,11 +20,14 @@
 #include "third_party/abseil/absl/container/node_hash_set.h"
 #include "third_party/abseil/absl/flags/flag.h"
 #include "third_party/abseil/absl/memory/memory.h"
+#if defined(HAVE_LLVM)
 #include "llvm/Config/llvm-config.h"
+#endif
 #include "third_party/abseil/absl/flags/parse.h"
 #include "third_party/abseil/absl/flags/usage.h"
 
 ABSL_FLAG(std::string, output_file, "fbdata.afdo", "Output file name");
+#if defined(HAVE_LLVM)
 ABSL_FLAG(bool, is_llvm, false, "Whether the profile is for LLVM");
 ABSL_FLAG(std::string, format, "binary",
           "LLVM profile format to emit. Possible values are 'text', "
@@ -126,16 +131,18 @@ bool verifyProperFlags(bool has_prof_sym_list) {
   return true;
 }
 }  // namespace
+#endif
 
 int main(int argc, char **argv) {
   absl::SetProgramUsageMessage(argv[0]);
-  absl::ParseCommandLine(argc, argv);
+  std::vector<char*> args = absl::ParseCommandLine(argc, argv);
   devtools_crosstool_autofdo::SymbolMap symbol_map;
 
   if (argc < 2) {
     LOG(FATAL) << "Please at least specify an input profile";
   }
 
+#if defined(HAVE_LLVM)
   if (absl::GetFlag(FLAGS_include_symbol_list) &&
       absl::GetFlag(FLAGS_format) != "extbinary") {
     LOG(WARNING) << "--include_symbol_list is true, but symbol list is only "
@@ -150,15 +157,20 @@ int main(int argc, char **argv) {
   absl::node_hash_set<std::string> names;
 
   if (!absl::GetFlag(FLAGS_is_llvm)) {
+#endif
     using devtools_crosstool_autofdo::AutoFDOProfileReader;
     typedef std::unique_ptr<AutoFDOProfileReader> AutoFDOProfileReaderPtr;
     std::unique_ptr<AutoFDOProfileReaderPtr[]> readers(
         new AutoFDOProfileReaderPtr[argc - 1]);
     // TODO(dehao): merge profile reader/writer into a single class
-    for (int i = 1; i < argc; i++) {
-      readers[i - 1] =
-          std::make_unique<AutoFDOProfileReader>(&symbol_map, true);
-      readers[i - 1]->ReadFromFile(argv[i]);
+    int i = 0;
+    for(char* arg : args) {
+      if (i != 0) {
+          readers[i] =
+              std::make_unique<AutoFDOProfileReader>(&symbol_map, true);
+          readers[i]->ReadFromFile(arg);
+      }
+      ++i;
     }
 
     symbol_map.CalculateThreshold();
@@ -167,6 +179,7 @@ int main(int argc, char **argv) {
     if (!writer.WriteToFile(absl::GetFlag(FLAGS_output_file))) {
       LOG(FATAL) << "Error writing to " << absl::GetFlag(FLAGS_output_file);
     }
+#if defined(HAVE_LLVM)
   } else {
     using devtools_crosstool_autofdo::LLVMProfileReader;
     using devtools_crosstool_autofdo::LLVMProfileWriter;
@@ -271,5 +284,6 @@ int main(int argc, char **argv) {
       LOG(FATAL) << "Error writing to " << absl::GetFlag(FLAGS_output_file);
     }
   }
+#endif
   return 0;
 }
